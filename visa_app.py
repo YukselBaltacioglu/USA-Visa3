@@ -19,7 +19,10 @@ def send_email_fail(city, day, month, year):
     port = 587
     user = "deneme.experilabs@outlook.com"
     password = "experilabs123"
-    receiver = "ykselbaltacioglu@gmail.com"
+    # Birden fazla alıcı
+    receivers = ["ykselbaltacioglu@gmail.com", "ercan.gokduman@experilabs.com", "yavuz.sahin@experilabs.com"]
+
+
     subject = "Daha Yakin Vize Tarihi Belirlenemedi!"
 
     body = """
@@ -34,7 +37,7 @@ def send_email_fail(city, day, month, year):
     # E-posta mesajını oluşturma
     msg = MIMEMultipart()
     msg['From'] = user
-    msg['To'] = receiver
+    msg['To'] = ", ".join(receivers)  # Alıcıları virgülle ayırarak birleştirme
     msg['Subject'] = subject
 
     # Mesajın içeriğini ekleme
@@ -48,7 +51,7 @@ def send_email_fail(city, day, month, year):
         conn.login(user, password)
 
         # E-postayı gönderme
-        conn.sendmail(user, receiver, msg.as_string())
+        conn.sendmail(user, receivers, msg.as_string())
 
         print("E-posta başarıyla gönderildi!")
     except Exception as e:
@@ -65,24 +68,27 @@ def send_email_success(city, day, month, year):
     port = 587
     user = "deneme.experilabs@outlook.com"
     password = "experilabs123"
-    receiver = "ykselbaltacioglu@gmail.com"
+
+    # Birden fazla alıcı
+    receivers = ["ykselbaltacioglu@gmail.com", "ercan.gokduman@experilabs.com", "yavuz.sahin@experilabs.com"]
+
     subject = "Daha Yakin Vize Tarihi Belirlendi!"
 
     body = """
-    Sitemizi ziyaret ettiğiniz için teşekkür ederiz. Size bildirmekten mutluluk duyariz ki, daha önce belirlenmiş olan vize tarihiniz yerine, daha yakin bir tarih için yeni bir vize alabilirsiniz.
+       Sitemizi ziyaret ettiğiniz için teşekkür ederiz. Size bildirmekten mutluluk duyarız ki, daha önce belirlenmiş olan vize tarihiniz yerine, daha yakın bir tarih için yeni bir vize alabilirsiniz.
 
-    Lütfen "Türkiye Official U.S. Department of State Visa Appointment Service" sitesinden belirtilen tarihler arasinda uygun bir tarih seçip, vizenizi almak için gereken adimlari takip edin.
+       Lütfen "Türkiye Official U.S. Department of State Visa Appointment Service" sitesinden belirtilen tarihler arasında uygun bir tarih seçip, vizenizi almak için gereken adımları takip edin.
 
-    Belirtilen Tarih : {}   {}/{}/{}
+       Belirtilen Tarih : {}   {}/{}/{}
 
-    İyi günler dileriz.
-    Experilabs
-    """.format(city, day, month, year)
+       İyi günler dileriz.
+       Experilabs
+       """.format(city, day, month, year)
 
     # E-posta mesajını oluşturma
     msg = MIMEMultipart()
     msg['From'] = user
-    msg['To'] = receiver
+    msg['To'] = ", ".join(receivers)  # Alıcıları virgülle ayırarak birleştirme
     msg['Subject'] = subject
 
     # Mesajın içeriğini ekleme
@@ -96,7 +102,7 @@ def send_email_success(city, day, month, year):
         conn.login(user, password)
 
         # E-postayı gönderme
-        conn.sendmail(user, receiver, msg.as_string())
+        conn.sendmail(user, receivers, msg.as_string())  # Burada da listeyi kullanıyoruz
 
         print("E-posta başarıyla gönderildi!")
     except Exception as e:
