@@ -13,7 +13,54 @@ import re
 from getpass import getpass
 
 
-def send_email(city, day, month, year):
+
+def send_email_fail(city, day, month, year):
+    host = "smtp-mail.outlook.com"
+    port = 587
+    user = "deneme.experilabs@outlook.com"
+    password = "experilabs123"
+    receiver = "ykselbaltacioglu@gmail.com"
+    subject = "Daha Yakin Vize Tarihi Belirlenemedi!"
+
+    body = """
+    Sitemizi ziyaret ettiğiniz için teşekkür ederiz. Size bildirmekten üzüntü duyariz ki, daha önce belirlenmiş olan vize tarihiniz yerine daha yakin bir vize tarihi bulunamadi.
+
+    Uygulamamiz sizin icin daha erken bir vize tarihi aramaya devam edecektir.
+
+    İyi günler dileriz.
+    Experilabs
+    """.format(city, day, month, year)
+
+    # E-posta mesajını oluşturma
+    msg = MIMEMultipart()
+    msg['From'] = user
+    msg['To'] = receiver
+    msg['Subject'] = subject
+
+    # Mesajın içeriğini ekleme
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        # SMTP sunucusuna bağlanma
+        conn = smtplib.SMTP(host, port)
+        conn.ehlo()
+        conn.starttls()
+        conn.login(user, password)
+
+        # E-postayı gönderme
+        conn.sendmail(user, receiver, msg.as_string())
+
+        print("E-posta başarıyla gönderildi!")
+    except Exception as e:
+        print(f"E-posta gönderilemedi: {e}")
+    finally:
+        # Bağlantıyı kapatma
+        conn.quit()
+
+
+# -------------------------------------------------
+
+def send_email_success(city, day, month, year):
     host = "smtp-mail.outlook.com"
     port = 587
     user = "deneme.experilabs@outlook.com"
@@ -201,11 +248,11 @@ def date_finder(city, current_appointment):
                 new_appointment_date = convert_to_date(date_element.text, month_content, year_content)
 
                 if new_appointment_date < current_appointment_date:
-                    send_email(city, date_element.text, month_content, year_content)
+                    send_email_success(city, date_element.text, month_content, year_content)
                     found_clickable_date = True
                     break
                 else:
-                    # send_email(city, date_element.text, month_content, year_content)
+                    send_email_fail(city, date_element.text, month_content, year_content)
                     not_gonna_find = True
                     print("Sorry Mate!! Couldn't find it in " + city + ".")
                     break
