@@ -1,3 +1,6 @@
+import datetime
+
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -11,10 +14,10 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import re
 from getpass import getpass
+import os
 
 
-
-def send_email_fail(city, day, month, year):
+def send_email_fail(city):
     host = "smtp-mail.outlook.com"
     port = 587
     user = "deneme.experilabs@outlook.com"
@@ -26,13 +29,13 @@ def send_email_fail(city, day, month, year):
     subject = "Daha Yakin Vize Tarihi Belirlenemedi!"
 
     body = """
-    Sitemizi ziyaret ettiğiniz için teşekkür ederiz. Size bildirmekten üzüntü duyariz ki, daha önce belirlenmiş olan vize tarihiniz yerine daha yakin bir vize tarihi bulunamadi.
+    Sitemizi ziyaret ettiğiniz için teşekkür ederiz. Size bildirmekten üzüntü duyariz ki, {} ili icin daha önce belirlenmiş olan vize tarihiniz yerine daha yakin bir vize tarihi bulunamadi.
 
     Uygulamamiz sizin icin daha erken bir vize tarihi aramaya devam edecektir.
 
     İyi günler dileriz.
     Experilabs
-    """.format(city, day, month, year)
+    """.format(city)
 
     # E-posta mesajını oluşturma
     msg = MIMEMultipart()
@@ -156,7 +159,6 @@ def second_page():
 
     current_appt = extract_date(date_content)
     print(current_appt)  # Çıktı: 28 Mayıs 2025
-    print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa")
     continue_button = WebDriverWait(driver, 60).until(
         EC.element_to_be_clickable(
             (By.XPATH, "//a[@href='/tr-tr/niv/schedule/56640483/continue_actions']")
@@ -171,8 +173,6 @@ def extract_date(text):
     cleaned_text = re.sub(r"\s+", " ", cleaned_text)  # Fazla boşlukları tek boşluğa indirir
     # Tarih formatını bulmak için düzenli ifade
     pattern = r"\d{1,2} \w+ \d{4}"
-    print("cleaned text: ")
-    print(cleaned_text)
     # Düzenli ifadeyi kullanarak tarihi ayır
     match = re.search(pattern, cleaned_text)
 
@@ -199,7 +199,7 @@ def third_page():
 
 # ---------------------------------FOURTH PAGE------------------------------------------
 # It is default Ankara city
-from datetime import datetime
+# from datetime import datetime
 
 def convert_to_date(day, month, year):
     month_mapping = {
@@ -211,7 +211,109 @@ def convert_to_date(day, month, year):
     }
 
     month_number = month_mapping[month]
-    return datetime.strptime(f"{day}/{month_number}/{year}", "%d/%m/%Y")
+    return datetime.datetime.strptime(f"{day}/{month_number}/{year}", "%d/%m/%Y")
+
+# Log dosyası yolu
+LOG_FILE_PATH = r"C:\Users\YükselBaltacıoğlu\Desktop\visa common with next pc\USA-Visa\last_fail_time.txt"
+
+
+
+def should_send_fail_email():
+    if os.path.exists(LOG_FILE_PATH):
+        with open(LOG_FILE_PATH, "r") as file:
+            last_fail_time_str = file.read().strip()
+            if last_fail_time_str:
+                last_fail_time = datetime.datetime.fromisoformat(last_fail_time_str)
+                if datetime.datetime.now() - last_fail_time < datetime.timedelta(hours=1):
+                    return False
+    return True
+
+def log_fail_time():
+    with open(LOG_FILE_PATH, "w") as file:
+        file.write(datetime.datetime.now().isoformat())
+
+
+def select_date(year_to_select, month_to_select, day_to_select):
+    # Tarih seçici açma
+    print("YYYYYYYYYYYYYYYYYYYYYYYYYYY")
+    month_to_select = get_month_number(month_to_select)
+    calendar = WebDriverWait(driver, 60).until(
+        EC.element_to_be_clickable((By.ID, "appointments_consulate_appointment_date"))
+    )
+    time.sleep(15)
+    driver.execute_script("arguments[0].click();", calendar)
+
+
+    print("XXXXXXXXXXXXXXXXXXXXXXXXX")
+    # Ay ve yıl seçim bölümünü bulma
+    while True:
+        print("ZZZZZZZZZZZZZZZZZZZZZZ")
+        # Mevcut yıl ve ayı kontrol etme
+        current_year_span = WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "ui-datepicker-year"))
+        )
+        current_year = current_year_span.text
+        current_month_span = WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "ui-datepicker-month"))
+        )
+        current_month = current_month_span.text
+
+        print("Current Year:", current_year)
+        print("Current Month:", current_month)
+        print("Year to Select:", year_to_select)
+        print("Month to Select:", month_to_select)
+
+
+        if current_year == year_to_select:
+            if int(get_month_number(current_month)) < month_to_select:
+                next_button = WebDriverWait(driver, 60).until(
+                    EC.element_to_be_clickable((By.CLASS_NAME, "ui-datepicker-next"))
+                )
+                next_button.click()
+            elif int(get_month_number(current_month)) > month_to_select:
+                prev_button = WebDriverWait(driver, 60).until(
+                    EC.element_to_be_clickable((By.CLASS_NAME, "ui-datepicker-prev"))
+                )
+                prev_button.click()
+            else:
+                break
+        # Yıl ve ay seçme işlemi
+        elif int(current_year) < int(year_to_select):
+            next_button = WebDriverWait(driver, 60).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, "ui-datepicker-next"))
+            )
+            next_button.click()
+        else:
+            prev_button = WebDriverWait(driver, 60).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, "ui-datepicker-prev"))
+            )
+            prev_button.click()
+    print("RRRRRRRRRRRRRRRRRRRRRR")
+    # Gün seçme
+    date_picker_div = WebDriverWait(driver, 60).until(
+        EC.presence_of_element_located((By.XPATH, "//div[@class='ui-datepicker-calendar']"))
+    )
+    print("IIIIIIIIIIIIIIIIIIIIIIIIII")
+    date_elements = date_picker_div.find_elements(By.TAG_NAME, "td")
+    day_to_select = day_to_select
+    print("HHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+    for date_element in date_elements:
+        print("OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO")
+        if date_element.text == day_to_select:
+            date_element.click()
+            print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+            break
+
+
+month_mapping = {
+    "January": 1, "February": 2, "March": 3, "April": 4, "May": 5, "June": 6,
+    "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12
+}
+
+
+def get_month_number(month_name):
+    return month_mapping.get(month_name, None)  # Ay ismi bulunamazsa None döner
+
 
 def date_finder(city, current_appointment):
     current_appointment_date = convert_to_date(*current_appointment.split())
@@ -256,9 +358,18 @@ def date_finder(city, current_appointment):
                 if new_appointment_date < current_appointment_date:
                     send_email_success(city, date_element.text, month_content, year_content)
                     found_clickable_date = True
+                    select_date(year_content, month_content, date_element.text)
                     break
                 else:
-                    send_email_fail(city, date_element.text, month_content, year_content)
+                    print("UUUUUUUUUUUUUUUUUUUUUUUU")
+                    print(month_content)
+                    select_date(year_content, month_content, date_element.text)
+                    if should_send_fail_email():
+                        send_email_fail(city)
+                        log_fail_time()
+                        print("E-posta başarıyla gönderildi!")
+                    else:
+                        print("E-posta gönderimi atlandı, çünkü 1 saat geçmedi.")
                     not_gonna_find = True
                     print("Sorry Mate!! Couldn't find it in " + city + ".")
                     break
