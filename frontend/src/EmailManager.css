@@ -1,0 +1,15 @@
+.email-manager {
+    padding: 20px;
+}
+
+.email-manager .form-group {
+    margin-bottom: 10px;
+}
+
+.email-manager .button-group {
+    margin-bottom: 10px;
+}
+
+.submit-button {
+    margin-top: 10px;
+}

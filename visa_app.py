@@ -1,14 +1,10 @@
 import datetime
-
-
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
-
 from selenium.webdriver.support.ui import Select
 import time
 import schedule
@@ -19,27 +15,109 @@ from email.mime.multipart import MIMEMultipart
 import re
 from getpass import getpass
 import os
+from flask import Flask, request, jsonify, render_template
+
+#from flask_cors import CORS
+
+#app = Flask(__name__)
+#CORS(app, resources={r"/login": {"origins": "*"}})  # Sadece /login endpointine izin ver
 
 
+from flask_cors import CORS
+app = Flask(__name__)
+CORS(app)
 
-def send_email_approved(city, day, month, year):
+EMAILS = []
+
+# Update the PATH to the correct location of chromedriver.exe
+PATH = (
+    "C:\\Program Files (x86)\\chrome-win64\\chrome.exe"  # Chrome'un exe dosyasinin yolu
+)
+
+# Log dosyası yolu
+LOG_FILE_PATH = r"C:\Users\YükselBaltacıoğlu\Desktop\visa common with next pc\USA-Visa\last_fail_time.txt"
+
+# Mapping for months
+MONTH_MAPPING = {
+    "January": 1, "February": 2, "March": 3, "April": 4, "May": 5, "June": 6,
+    "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12
+}
+# Hardcoded kullanıcı bilgileri
+users = {
+    "pcaglarsahin@gmail.com": "Kel35Bek",
+    "anotheruser@example.com": "mypassword"
+}
+
+
+def main(email_to_use, password_to_use, EMAILS):
+    chrome_options = Options()
+    chrome_options.add_argument("--start-maximized")
+    # WebDriver'i başlatma
+    driver = webdriver.Chrome(options=chrome_options)
+
+    # Visa sayfasina gitme
+    driver.get("https://ais.usvisa-info.com/tr-tr/niv/users/sign_in")
+    wait = WebDriverWait(driver, 60)
+
+    email = email_to_use
+    password = password_to_use
+    # İlk sayfa giriş işlemleri
+    first_page(email, password, driver)
+    current_appt = second_page(driver)
+    third_page(driver)
+
+    # Önce Ankara'yı kontrol et
+    ankara_available = date_finder("Ankara", current_appt, driver, EMAILS)
+
+    # Ankara'da uygun tarih bulunamadıysa İstanbul'u kontrol et
+    if not ankara_available:
+        close_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//a[@class='button secondary' and contains(text(), 'Kapat')]")
+            )
+        )
+        close_button.click()
+        second_page(driver)
+        time.sleep(5)
+        third_page(driver)
+        istanbul_option = WebDriverWait(driver, 60).until(  # takvimi aç
+            EC.element_to_be_clickable((By.XPATH, "//option[contains(text(),'Istanbul')]"))
+        )
+        istanbul_option.click()
+        time.sleep(5)
+        istanbul_available = date_finder("Istanbul", current_appt, driver, EMAILS)
+
+        # Eğer ne Ankara'da ne de İstanbul'da uygun tarih bulunamadıysa, başarısızlık e-postasını gönder
+        if not istanbul_available:
+            if should_send_fail_email():
+                send_email_fail("Istanbul", "Ankara", EMAILS)
+                log_fail_time()
+                print("E-posta başarıyla gönderildi!")
+            else:
+                print("E-posta gönderimi atlandı, çünkü 1 saat geçmedi.")
+    else:
+        print("Ankara'da uygun bir tarih bulundu, İstanbul kontrol edilmedi.")
+
+    time.sleep(20)
+
+
+def send_email_approved(city, day, month, year, EMAILS):
     host = "smtp-mail.outlook.com"
     port = 587
     user = "deneme.experilabs@outlook.com"
     password = "experilabs123"
 
     # Birden fazla alıcı
-    receivers = ["ykselbaltacioglu@gmail.com", "ercan.gokduman@experilabs.com", "yavuz.sahin@experilabs.com"]
-
+    receivers = EMAILS
     subject = "Daha Yakin Yeni Vize Tarihi Onaylandi!"
 
     body = """
     Sitemizi ziyaret ettiğiniz için teşekkür ederiz. Size bildirmekten mutluluk duyarız ki, daha önce belirlenmiş olan vize tarihiniz yerine, daha yakın bir tarih bulunmus olup belirtilen bu yeni tarih onaylanmistir.
-    
+
     Lütfen "Türkiye Official U.S. Department of State Visa Appointment Service" sitesine gidip alinmis olan randevuyu kontrol ediniz.
-    
+
     Belirtilen Tarih : {}   {}/{}/{}
-    
+
     İyi günler dileriz.
     Experilabs
     """.format(city, day, month, year)
@@ -70,17 +148,19 @@ def send_email_approved(city, day, month, year):
         # Bağlantıyı kapatma
         conn.quit()
 
-def send_email_fail(city1, city2):
+
+def send_email_fail(city1, city2, EMAILS):
     host = "smtp-mail.outlook.com"
     port = 587
     user = "deneme.experilabs@outlook.com"
     password = "experilabs123"
     # Birden fazla alıcı
-    receivers = ["ykselbaltacioglu@gmail.com", "ercan.gokduman@experilabs.com", "yavuz.sahin@experilabs.com"]
-
-
+    receivers = EMAILS
     subject = "Daha Yakin Vize Tarihi Belirlenemedi!"
 
+    print(EMAILS)
+    print("###########################")
+    print(receivers)
     body = """
     Sitemizi ziyaret ettiğiniz için teşekkür ederiz. Size bildirmekten üzüntü duyariz ki, {} ve {} illeri icin daha önce belirlenmiş olan vize tarihiniz yerine daha yakin bir vize tarihi bulunamadi.
 
@@ -119,14 +199,14 @@ def send_email_fail(city1, city2):
 
 # -------------------------------------------------
 
-def send_email_success(city, day, month, year):
+def send_email_success(city, day, month, year, EMAILS):
     host = "smtp-mail.outlook.com"
     port = 587
     user = "deneme.experilabs@outlook.com"
     password = "experilabs123"
 
     # Birden fazla alıcı
-    receivers = ["ykselbaltacioglu@gmail.com", "ercan.gokduman@experilabs.com", "yavuz.sahin@experilabs.com"]
+    receivers = EMAILS
 
     subject = "Daha Yakin Vize Tarihi Belirlendi!"
 
@@ -168,23 +248,8 @@ def send_email_success(city, day, month, year):
         conn.quit()
 
 
-# Update the PATH to the correct location of chromedriver.exe
-PATH = (
-    "C:\\Program Files (x86)\\chrome-win64\\chrome.exe"  # Chrome'un exe dosyasinin yolu
-)
-
-chrome_options = Options()
-chrome_options.add_argument("--start-maximized")
-# WebDriver'i başlatma
-driver = webdriver.Chrome(options=chrome_options)
-
-# Visa sayfasina gitme
-driver.get("https://ais.usvisa-info.com/tr-tr/niv/users/sign_in")
-wait = WebDriverWait(driver, 60)
-
-
 # ---------------------------------FIRST PAGE--------------------------------------
-def first_page(email, password):
+def first_page(email, password, driver):
     email_input = driver.find_element(By.ID, "user_email")
     email_input.send_keys(email)  # Inputa metin yazin
 
@@ -204,7 +269,7 @@ def first_page(email, password):
 
 
 # ---------------------------------SECOND PAGE--------------------------------------
-def second_page():
+def second_page(driver):
     date_span = WebDriverWait(driver, 60).until(
         EC.presence_of_element_located((By.CLASS_NAME, "consular-appt"))
     )
@@ -215,10 +280,10 @@ def second_page():
     continue_button = WebDriverWait(driver, 60).until(
         EC.element_to_be_clickable(
             (By.XPATH, "//a[@href='/tr-tr/niv/schedule/56640483/continue_actions']")
-        )   # //*[@id="main"]/div[2]/div[2]/div[1]/div/div/div[1]/div[2]/ul/li/a
+        )  # //*[@id="main"]/div[2]/div[2]/div[1]/div/div/div[1]/div[2]/ul/li/a
     )
     continue_button.click()
-    return  current_appt
+    return current_appt
 
 
 def extract_date(text):
@@ -236,7 +301,7 @@ def extract_date(text):
 
 
 # -------------------------------THIRD PAGE------------------------------------------
-def third_page():
+def third_page(driver):
     list_items = WebDriverWait(driver, 60).until(
         EC.element_to_be_clickable((By.XPATH, "//*[@id='forms']/ul/li[3]"))
     )
@@ -266,10 +331,6 @@ def convert_to_date(day, month, year):
     month_number = month_mapping[month]
     return datetime.datetime.strptime(f"{day}/{month_number}/{year}", "%d/%m/%Y")
 
-# Log dosyası yolu
-LOG_FILE_PATH = r"C:\Users\YükselBaltacıoğlu\Desktop\visa common with next pc\USA-Visa\last_fail_time.txt"
-
-
 
 def should_send_fail_email():
     if os.path.exists(LOG_FILE_PATH):
@@ -281,23 +342,17 @@ def should_send_fail_email():
                     return False
     return True
 
+
 def log_fail_time():
     with open(LOG_FILE_PATH, "w") as file:
         file.write(datetime.datetime.now().isoformat())
 
 
-
-
-month_mapping = {
-    "January": 1, "February": 2, "March": 3, "April": 4, "May": 5, "June": 6,
-    "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12
-}
-
-
 def get_month_number(month_name):
-    return month_mapping.get(month_name, None)  # Ay ismi bulunamazsa None döner
+    return MONTH_MAPPING.get(month_name, None)  # Ay ismi bulunamazsa None döner
 
-def date_picker(city, day, month, year):
+
+def date_picker(city, day, month, year, driver, EMAILS):
     # Tarih seçildikten sonra saat seçimi
     time.sleep(5)
     time_hours = WebDriverWait(driver, 60).until(  # Saat takvimini aç
@@ -327,12 +382,10 @@ def date_picker(city, day, month, year):
         (By.CLASS_NAME, "button alert")))
     approve_button.click()
     time.sleep(60)
-    send_email_approved(city, day, month, year)
+    send_email_approved(city, day, month, year, EMAILS)
 
 
-
-
-def date_finder(city, current_appointment):
+def date_finder(city, current_appointment, driver, EMAILS):
     current_appointment_date = convert_to_date(*current_appointment.split())
 
     calendar = WebDriverWait(driver, 60).until(  # Takvimi aç
@@ -376,10 +429,10 @@ def date_finder(city, current_appointment):
 
                 # Dikkatli ol, yanlislikla True kalmasin !!!!!!!!!!!!!!!!!!!
                 if new_appointment_date < current_appointment_date:
-                    send_email_success(city, date_element.text, month_content, year_content)
+                    send_email_success(city, date_element.text, month_content, year_content, EMAILS)
                     found_clickable_date = True
                     date_element.click()  # Günü seçer
-                    date_picker(city, date_element.text, month_content, year_content)  # Saat seçimini yap
+                    date_picker(city, date_element.text, month_content, year_content, EMAILS)  # Saat seçimini yap
                     return True  # Uygun tarih bulundu
                 else:
                     print(f"No earlier date found for {city}. Moving to next date.")
@@ -390,48 +443,50 @@ def date_finder(city, current_appointment):
 
     return False  # Uygun tarih bulunamadı
 
+EMAIL = ""
+PASSWORD = ""
+@app.route('/login', methods=['POST'])
+def login():
 
-email = "pcaglarsahin@gmail.com"
-password = "Kel35Bek"
+    global EMAIL
+    global PASSWORD
+    print("AAAAA")
+    # İstekten gelen email ve şifreyi alıyoruz
+    data = request.json
+    EMAIL = data.get('email')
+    PASSWORD = data.get('password')
+    print("You are in.")
+    # Kullanıcının hardcoded listede olup olmadığını kontrol et
+    if EMAIL in users and users[EMAIL] == PASSWORD:
+        print("SUCCESS")
+        return jsonify({'message': 'Login successful!'}), 200
+    else:
+        return jsonify({'message': 'Invalid credentials'}), 401
 
-# İlk sayfa giriş işlemleri
-first_page(email, password)
-current_appt = second_page()
-third_page()
 
-# Önce Ankara'yı kontrol et
-ankara_available = date_finder("Ankara", current_appt)
-
-# Ankara'da uygun tarih bulunamadıysa İstanbul'u kontrol et
-if not ankara_available:
-    close_button = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable(
-            (By.XPATH, "//a[@class='button secondary' and contains(text(), 'Kapat')]")
-        )
-    )
-    close_button.click()
-    second_page()
-    time.sleep(5)
-    third_page()
-    istanbul_option = WebDriverWait(driver, 60).until(  # takvimi aç
-        EC.element_to_be_clickable((By.XPATH, "//option[contains(text(),'Istanbul')]"))
-    )
-    istanbul_option.click()
-    time.sleep(5)
-    istanbul_available = date_finder("Istanbul", current_appt)
-
-    # Eğer ne Ankara'da ne de İstanbul'da uygun tarih bulunamadıysa, başarısızlık e-postasını gönder
-    if not istanbul_available:
-        if should_send_fail_email():
-            send_email_fail("Istanbul", "Ankara")
-            log_fail_time()
-            print("E-posta başarıyla gönderildi!")
-        else:
-            print("E-posta gönderimi atlandı, çünkü 1 saat geçmedi.")
-else:
-    print("Ankara'da uygun bir tarih bulundu, İstanbul kontrol edilmedi.")
+@app.route('/emails', methods=['POST'])
+def emails():
+    print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa")
+    global EMAILS
+    global EMAIL
+    global PASSWORD
+    print("Also in.")
+    data = request.json
+    EMAILS = data.get('emails')
+    if emails:
+        print("Received emails:", EMAILS)  # Gelen e-posta adreslerini işleme
+        main(EMAIL, PASSWORD, EMAILS)
+        return jsonify({'message': 'Emails received successfully!'}), 200
+    else:
+        return jsonify({'message': 'No emails provided'}), 400
 
 
 
 
-time.sleep(20)
+if __name__ == "__main__":
+    app.run(debug=True)
+
+# email = "pcaglarsahin@gmail.com"
+# password = "Kel35Bek"
+
+
