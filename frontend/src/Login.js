@@ -9,25 +9,28 @@ const Login = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        const response = await fetch('http://127.0.0.1:5000/login', {  // Backend URL'u güncellenmiş
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
+    
+        try {
+            const response = await fetch('http://127.0.0.1:9000/login', {  
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+            });
+    
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+    
+            const data = await response.json();
             console.log('Login successful:', data);
-            // Başarılı girişte başka bir sayfaya yönlendirme
-            navigate('/emails');  // Yönlendirmek istediğiniz sayfanın yolu
-        } else {
-            console.error('Login failed:', data);
+            navigate('/emails');
+        } catch (error) {
+            console.error('There was an error with the login:', error);
         }
     };
+    
 
     return (
         <div className="login-container">

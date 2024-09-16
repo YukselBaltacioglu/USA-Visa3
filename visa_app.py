@@ -1,4 +1,10 @@
 import datetime
+from contextlib import nullcontext
+from pickle import GLOBAL
+import requests
+from selenium.common.exceptions import TimeoutException
+from django.utils.functional import empty
+from flask_cors import CORS
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -17,13 +23,9 @@ from getpass import getpass
 import os
 from flask import Flask, request, jsonify, render_template
 
-#from flask_cors import CORS
-
-#app = Flask(__name__)
-#CORS(app, resources={r"/login": {"origins": "*"}})  # Sadece /login endpointine izin ver
-
-
+from flask import Flask
 from flask_cors import CORS
+
 app = Flask(__name__)
 CORS(app)
 
@@ -35,7 +37,7 @@ PATH = (
 )
 
 # Log dosyası yolu
-LOG_FILE_PATH = r"C:\Users\YükselBaltacıoğlu\Desktop\visa common with next pc\USA-Visa\last_fail_time.txt"
+LOG_FILE_PATH = r"C:\Users\YükselBaltacıoğlu\Desktop\VISA PROJECT\USA-Visa\last_fail_time.txt"
 
 # Mapping for months
 MONTH_MAPPING = {
@@ -47,7 +49,7 @@ users = {
     "pcaglarsahin@gmail.com": "Kel35Bek",
     "anotheruser@example.com": "mypassword"
 }
-
+YOGUNLUK = False
 
 def main(email_to_use, password_to_use, EMAILS):
     chrome_options = Options()
@@ -64,6 +66,7 @@ def main(email_to_use, password_to_use, EMAILS):
     # İlk sayfa giriş işlemleri
     first_page(email, password, driver)
     current_appt = second_page(driver)
+
     third_page(driver)
 
     # Önce Ankara'yı kontrol et
@@ -98,7 +101,63 @@ def main(email_to_use, password_to_use, EMAILS):
     else:
         print("Ankara'da uygun bir tarih bulundu, İstanbul kontrol edilmedi.")
 
-    time.sleep(20)
+    if YOGUNLUK:
+        send_yogunluk_email()
+    # @app.route('/complete', methods=['POST'])
+    # def complete():
+    #     # İşlemin tamamlandığını frontend'e iletmek için bir mesaj döneriz
+    #     return jsonify({'message': 'İşlem tamamlandı, mail kutunuzu kontrol ediniz!'}), 200
+
+    requests.post('http://127.0.0.1:9000/complete')
+    time.sleep(5)
+    driver.quit()
+
+
+
+def send_yogunluk_email():
+    host = "smtp-mail.outlook.com"
+    port = 587
+    user = "deneme.experilabs@outlook.com"
+    password = "experilabs123"
+
+    # Birden fazla alıcı
+    receivers = EMAILS
+    subject = "Sistemsel yogunluktan dolayi islem gerceklestirilemedi!!"
+
+    body = """
+        USA Visa sistmindeki anlik yogunluktan dolayi islemler askiya alindi. 
+        
+        Olagan frekansta islemler gerceklestirilmeye devam edilecektir.
+        
+        İyi günler dileriz.
+        Experilabs
+        """
+
+    # E-posta mesajını oluşturma
+    msg = MIMEMultipart()
+    msg['From'] = user
+    msg['To'] = ", ".join(receivers)  # Alıcıları virgülle ayırarak birleştirme
+    msg['Subject'] = subject
+
+    # Mesajın içeriğini ekleme
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        # SMTP sunucusuna bağlanma
+        conn = smtplib.SMTP(host, port)
+        conn.ehlo()
+        conn.starttls()
+        conn.login(user, password)
+
+        # E-postayı gönderme
+        conn.sendmail(user, receivers, msg.as_string())  # Burada da listeyi kullanıyoruz
+
+        print("E-posta başarıyla gönderildi!")
+    except Exception as e:
+        print(f"E-posta gönderilemedi: {e}")
+    finally:
+        # Bağlantıyı kapatma
+        conn.quit()
 
 
 def send_email_approved(city, day, month, year, EMAILS):
@@ -386,7 +445,29 @@ def date_picker(city, day, month, year, driver, EMAILS):
 
 
 def date_finder(city, current_appointment, driver, EMAILS):
+    global YOGUNLUK
+    time.sleep(10)
     current_appointment_date = convert_to_date(*current_appointment.split())
+    possible_error = ""
+    try:
+        # Elementin var olup olmadığını kontrol et
+        possible_error = WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.ID, "consulate_date_time_not_available"))
+        )
+        print("Error element is present:", possible_error)
+        # Eğer element varsa, başka bir işlem yapma
+        print("Hata mevcut. İşlem yapılmayacak.")
+    except TimeoutException:
+        # Eğer element belirtilen süre içinde bulunamazsa, işlem yapmaya devam et
+        print("Error element not found. Proceeding with further steps.")
+        # Diğer işlemler burada yapılır
+
+
+    if possible_error is not None:
+        YOGUNLUK = True
+        print("Sistemde yogunluk var, daha sonra tekrar deneyin.")
+
+        return False
 
     calendar = WebDriverWait(driver, 60).until(  # Takvimi aç
         EC.element_to_be_clickable((By.ID, "appointments_consulate_appointment_date"))
@@ -445,9 +526,12 @@ def date_finder(city, current_appointment, driver, EMAILS):
 
 EMAIL = ""
 PASSWORD = ""
+
+
+# main("pcaglarsahin@gmail.com", "Kel35Bek", ["ykselbaltacioglu@gmail.com"])
+print("COMIING")
 @app.route('/login', methods=['POST'])
 def login():
-
     global EMAIL
     global PASSWORD
     print("AAAAA")
@@ -480,13 +564,17 @@ def emails():
     else:
         return jsonify({'message': 'No emails provided'}), 400
 
-
+@app.route('/complete', methods=['POST'])
+def complete():
+    # İşlemin tamamlandığını frontend'e iletmek için bir mesaj döneriz
+    return jsonify({'message': 'İşlem tamamlandı, mail kutunuzu kontrol ediniz!'}), 200
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(port=9000, debug=True)
 
-# email = "pcaglarsahin@gmail.com"
-# password = "Kel35Bek"
+
+# email =            pcaglarsahin@gmail.com
+# password =            Kel35Bek
 
 

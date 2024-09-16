@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 
 const EmailManager = () => {
-    const [emails, setEmails] = useState(['']); // İlk başta tek bir input
-    const [isSubmitted, setIsSubmitted] = useState(false);  // Onay ekranı için state ekliyoruz
+    const [emails, setEmails] = useState(['']);
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [completionStatus, setCompletionStatus] = useState('');
 
     // Yeni bir email input alanı ekleme
     const addEmailField = () => {
@@ -19,41 +20,61 @@ const EmailManager = () => {
     // Bir email inputunu kaldırma
     const removeEmailField = (index) => {
         const newEmails = [...emails];
-        newEmails.splice(index, 1); // İlgili index'teki emaili kaldır
+        newEmails.splice(index, 1);
         setEmails(newEmails);
     };
 
     // Backend'e email'leri gönderme
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setIsSubmitted(true);  // Butona basıldığı anda onay ekranını gösterecek
-        const response = await fetch('http://127.0.0.1:5000/emails', {  // Backend URL'i
+        setIsSubmitted(true);
+        const response = await fetch('http://127.0.0.1:9000/emails', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ emails }),  // Email'leri backend'e gönderiyoruz
+            body: JSON.stringify({ emails }),
         });
 
         const data = await response.json();
         if (response.ok) {
             console.log('Emails sent successfully:', data);
+
+            // Email gönderme işlemi tamamlandıktan sonra /complete endpoint'ine istek gönderme
+            const completeResponse = await fetch('http://127.0.0.1:9000/complete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: 'completed' }), // İşlemin tamamlandığını belirten veri
+            });
+
+            const completeData = await completeResponse.json();
+            if (completeResponse.ok) {
+                setCompletionStatus(completeData.message);
+            } else {
+                console.error('Failed to complete:', completeData);
+            }
         } else {
             console.error('Failed to send emails:', data);
         }
     };
 
-    // Eğer mailler başarılı bir şekilde gönderildiyse onay ekranı gösterelim
-    if (isSubmitted) {
+    if (completionStatus) {
         return (
             <div>
-                <h2>Mailler Başarıyla Gönderildi</h2>
-                <p>İşleminiz başlatıldı. Lütfen bekleyin.</p>
+                <h2>{completionStatus}</h2>
             </div>
         );
     }
-
-    // Normal email input formu
+    if (isSubmitted) {
+        return (
+            <div>
+                <h2>Email adresleri onaylandi.</h2>
+                <p>Lutfen Bekleyiniz.</p>
+            </div>
+        );
+    }
     return (
         <div>
             <h2>Email Manager</h2>
